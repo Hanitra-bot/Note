@@ -1,6 +1,4 @@
--- ============================================================
--- SCHEMA db_note — version prof
--- ============================================================
+
 
 CREATE TABLE IF NOT EXISTS Candidat (
     id   SERIAL PRIMARY KEY,
