@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Calcul de Notes Finales</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg2: #161b22; --bg3: #1c2128;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --accent: #58a6ff; --green: #3fb950; --red: #f85149;
+    --orange: #e3b341; --purple: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: 230px; min-width: 230px; background: var(--bg2);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    padding: 16px 0;
+  }
+  .sidebar-title { padding: 0 20px 16px; font-size: 13px; font-weight: 700;
+    color: var(--accent); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+  .nav-group { padding: 10px 12px 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 20px;
+    cursor: pointer; border-radius: 0; font-size: 14px; color: var(--muted);
+    transition: all .15s; border-left: 3px solid transparent;
+  }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--bg3); color: var(--accent); border-left-color: var(--accent); }
+  .nav-icon { width: 18px; text-align: center; font-size: 15px; }
+
+  /* MAIN */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar {
+    height: 52px; background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 24px; gap: 12px;
+  }
+  #topbar h1 { font-size: 16px; font-weight: 600; }
+  #topbar .badge { background: var(--accent); color: #fff; border-radius: 20px; padding: 2px 10px; font-size: 11px; }
+  #content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+
+  /* CALCULATOR */
+  .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .autocomplete-wrap { position: relative; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+  input[type=text], select {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 9px 12px; color: var(--text); font-size: 14px;
+  }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--accent); }
+  .dropdown {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+    background: var(--bg3); border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto;
+  }
+  .dropdown-item { padding: 9px 12px; cursor: pointer; font-size: 13px; }
+  .dropdown-item:hover { background: var(--bg2); color: var(--accent); }
+  .hidden { display: none; }
+
+  /* RESULT BOX */
+  #calc-result { margin-top: 20px; }
+  .result-card {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px;
+  }
+  .result-score {
+    text-align: center; font-size: 56px; font-weight: 700;
+    color: var(--green); margin: 12px 0;
+  }
+  .result-score.null { color: var(--red); font-size: 32px; }
+  .result-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  .meta-badge {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; font-size: 12px;
+  }
+  .meta-badge span { color: var(--muted); margin-right: 4px; }
+  .notes-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .note-chip {
+    background: var(--bg2); border: 1px solid var(--accent); border-radius: 20px;
+    padding: 4px 14px; font-size: 14px; font-weight: 600; color: var(--accent);
+  }
+  .diff-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  .diff-table th { color: var(--muted); font-weight: 500; padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  .diff-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .save-btn {
+    margin-top: 16px; background: var(--green); color: #0f1117;
+    border: none; border-radius: 6px; padding: 10px 24px;
+    font-size: 14px; font-weight: 700; cursor: pointer; width: 100%;
+  }
+  .save-btn:hover { opacity: .9; }
+  .save-btn:disabled { background: var(--muted); cursor: default; }
+  .recalc-btn {
+    margin-top: 8px; background: transparent; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 6px; padding: 8px 24px;
+    font-size: 13px; cursor: pointer; width: 100%;
+  }
+
+  /* TABLES */
+  .tbl-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  .btn-add { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn-add:hover { opacity: .85; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: var(--bg3); color: var(--muted); font-weight: 500; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  tbody tr:hover td { background: var(--bg3); }
+  .btn-edit { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 3px 10px; cursor: pointer; font-size: 12px; margin-right: 4px; }
+  .btn-del  { background: transparent; color: var(--red); border: 1px solid var(--red); border-radius: 4px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; }
+  .modal-overlay.hidden { display: none; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 24px; width: 420px; max-width: 95vw; }
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+  .form-group { margin-bottom: 14px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+  .btn-save { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 9px 22px; cursor: pointer; font-weight: 600; }
+  .btn-cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 9px 22px; cursor: pointer; }
+  .tag { display: inline-block; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 11px; margin: 2px; color: var(--muted); }
+
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+  .stat-val { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .loading { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  .empty   { color: var(--muted); font-size: 13px; padding: 40px; text-align: center; }
+  .error-msg { color: var(--red); font-size: 13px; padding: 12px; background: rgba(248,81,73,.1); border-radius: 6px; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-title">🎓 Notes Finales-ETU3632</div>
+  <div class="nav-group">Calcul</div>
+  <div class="nav-item active" onclick="showPanel('calculateur')" id="nav-calculateur">
+    <span class="nav-icon">🧮</span> Calculateur
+  </div>
+  <div class="nav-item" onclick="showPanel('notes-finales')" id="nav-notes-finales">
+    <span class="nav-icon">📋</span> Notes finales
+  </div>
+  <div class="nav-group">Données</div>
+  <div class="nav-item" onclick="showPanel('candidats')" id="nav-candidats">
+    <span class="nav-icon">👤</span> Candidats
+  </div>
+  <div class="nav-item" onclick="showPanel('matieres')" id="nav-matieres">
+    <span class="nav-icon">📚</span> Matières
+  </div>
+  <div class="nav-item" onclick="showPanel('correcteurs')" id="nav-correcteurs">
+    <span class="nav-icon">✏️</span> Correcteurs
+  </div>
+  <div class="nav-item" onclick="showPanel('notes')" id="nav-notes">
+    <span class="nav-icon">📝</span> Notes
+  </div>
+  <div class="nav-group">Config</div>
+  <div class="nav-item" onclick="showPanel('parametres')" id="nav-parametres">
+    <span class="nav-icon">⚙️</span> Paramètres
+  </div>
+  <div class="nav-item" onclick="showPanel('resolutions')" id="nav-resolutions">
+    <span class="nav-icon">🎯</span> Résolutions
+  </div>
+  <div class="nav-item" onclick="showPanel('operations')" id="nav-operations">
+    <span class="nav-icon">🔣</span> Opérations
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="topbar">
+    <h1 id="topbar-title">Calculateur</h1>
+    <span class="badge" id="topbar-badge">Calcul de note finale</span>
+  </div>
+  <div id="content">
+
+    <!-- ====== CALCULATEUR ====== -->
+    <div class="panel active" id="panel-calculateur">
+      <div class="card">
+        <div class="card-title">🧮 Sélectionner candidat &amp; matière</div>
+        <div class="calc-grid">
+          <div>
+            <div class="autocomplete-wrap">
+              <label>Candidat</label>
+              <input type="text" id="calc-candidat-input" placeholder="Tapez le nom du candidat…"
+                oninput="filterCandidats(this.value)" onblur="setTimeout(()=>document.getElementById('drop-candidat').classList.add('hidden'),200)"/>
+              <input type="hidden" id="calc-candidat-id"/>
+              <div class="dropdown hidden" id="drop-candidat"></div>
+            </div>
+          </div>
+          <div>
+            <div class="autocomplete-wrap">
+              <label>Matière</label>
+              <input type="text" id="calc-matiere-input" placeholder="Tapez la matière…"
+                oninput="filterMatieres(this.value)" onblur="setTimeout(()=>document.getElementById('drop-matiere').classList.add('hidden'),200)"/>
+              <input type="hidden" id="calc-matiere-id"/>
+              <div class="dropdown hidden" id="drop-matiere"></div>
+            </div>
+          </div>
+        </div>
+        <div id="calc-result"></div>
+      </div>
+    </div>
+
+    <!-- ====== NOTES FINALES ====== -->
+    <div class="panel" id="panel-notes-finales">
+      <div class="card">
+        <div class="card-title">📋 Notes finales sauvegardées</div>
+        <div id="tbl-notes-finales"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+    <!-- ====== CANDIDATS ====== -->
+    <div class="panel" id="panel-candidats">
+      <div class="card">
+        <div class="card-title">👤 Candidats</div>
+        <div class="tbl-actions">
+          <button class="btn-add" onclick="openModalCrud('candidat',null)">+ Ajouter</button>
+        </div>
+        <div id="tbl-candidats"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+    <!-- ====== CORRECTEURS ====== -->
+    <div class="panel" id="panel-correcteurs">
+      <div class="card">
+        <div class="card-title">✏️ Correcteurs</div>
+        <div class="tbl-actions">
+          <button class="btn-add" onclick="openModalCrud('correcteur',null)">+ Ajouter</button>
+        </div>
+        <div id="tbl-correcteurs"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+    <!-- ====== MATIERES ====== -->
+    <div class="panel" id="panel-matieres">
+      <div class="card">
+        <div class="card-title">📚 Matières</div>
+        <div class="tbl-actions">
+          <button class="btn-add" onclick="openModalCrud('matiere',null)">+ Ajouter</button>
+        </div>
+        <div id="tbl-matieres"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+    <!-- ====== NOTES ====== -->
+    <div class="panel" id="panel-notes">
+      <div class="card">
+        <div class="card-title">📝 Notes individuelles</div>
+        <div class="tbl-actions">
+          <button class="btn-add" onclick="openModalNote(null)">+ Ajouter</button>
+        </div>
+        <div id="tbl-notes"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+    <!-- ====== PARAMETRES ====== -->
+    <div class="panel" id="panel-parametres">
+      <div class="card">
+        <div class="card-title">⚙️ Paramètres</div>
+        <div class="tbl-actions">
+          <button class="btn-add" onclick="openModalParametre(null)">+ Ajouter</button>
+        </div>
+        <div id="tbl-parametres"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+    <!-- ====== RESOLUTIONS ====== -->
+    <div class="panel" id="panel-resolutions">
+      <div class="card">
+        <div class="card-title">🎯 Résolutions</div>
+        <div class="tbl-actions">
+          <button class="btn-add" onclick="openModalSimple('resolution',null,'/api/resolutions','libelle')">+ Ajouter</button>
+        </div>
+        <div id="tbl-resolutions"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+    <!-- ====== OPERATIONS ====== -->
+    <div class="panel" id="panel-operations">
+      <div class="card">
+        <div class="card-title">🔣 Opérations</div>
+        <div class="tbl-actions">
+          <button class="btn-add" onclick="openModalSimple('operation',null,'/api/operations','signe')">+ Ajouter</button>
+        </div>
+        <div id="tbl-operations"><div class="loading">Chargement…</div></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- MODAL GÉNÉRIQUE -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<script>
+const API = '';
+
+// ===================== NAV =====================
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  const titles = {
+    calculateur: ['Calculateur','Calcul de note finale'],
+    'notes-finales': ['Notes finales','Résultats sauvegardés'],
+    candidats: ['Candidats','Gestion des candidats'],
+    matieres: ['Matières','Gestion des matières'],
+    correcteurs: ['Correcteurs','Gestion des correcteurs'],
+    notes: ['Notes','Saisie des notes'],
+    parametres: ['Paramètres','Règles de calcul'],
+    resolutions: ['Résolutions','Types de résolution'],
+    operations: ['Opérations','Opérateurs de comparaison'],
+  };
+  const [t, b] = titles[name] || [name, ''];
+  document.getElementById('topbar-title').textContent = t;
+  document.getElementById('topbar-badge').textContent = b;
+  loadPanel(name);
+}
+
+// ===================== LOAD PANELS =====================
+let cache = { candidats: [], matieres: [], correcteurs: [], resolutions: [], operations: [] };
+
+async function loadPanel(name) {
+  if (name === 'calculateur') return;
+  if (name === 'notes-finales') return loadNotesFinales();
+  if (name === 'candidats')    return loadCandidats();
+  if (name === 'correcteurs')  return loadCorrecteurs();
+  if (name === 'matieres')     return loadMatieres();
+  if (name === 'notes')        return loadNotes();
+  if (name === 'parametres')   return loadParametres();
+  if (name === 'resolutions')  return loadResolutions();
+  if (name === 'operations')   return loadOperations();
+}
+
+async function apiFetch(url, opts={}) {
+  const r = await fetch(API + url, { headers: {'Content-Type':'application/json'}, ...opts });
+  if (!r.ok) { const t = await r.text(); throw new Error(t || r.statusText); }
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+// ===================== CANDIDATS =====================
+async function loadCandidats() {
+  const data = await apiFetch('/api/candidats');
+  cache.candidats = data;
+  document.getElementById('tbl-candidats').innerHTML = renderTable(
+    ['ID','Nom','Actions'],
+    data.map(c => `<tr>
+      <td>${c.id}</td>
+      <td>${c.nom}</td>
+      <td>
+        <button class="btn-edit" onclick="openModalCrud('candidat',${JSON.stringify(c).replace(/"/g,"&quot;")})">Éditer</button>
+        <button class="btn-del"  onclick="deleteItem('/api/candidats/${c.id}', loadCandidats)">Suppr.</button>
+      </td></tr>`)
+  );
+}
+
+// ===================== CORRECTEURS =====================
+async function loadCorrecteurs() {
+  const data = await apiFetch('/api/correcteurs');
+  cache.correcteurs = data;
+  document.getElementById('tbl-correcteurs').innerHTML = renderTable(
+    ['ID','Nom','Actions'],
+    data.map(c => `<tr>
+      <td>${c.id}</td>
+      <td>${c.nom}</td>
+      <td>
+        <button class="btn-edit" onclick="openModalCrud('correcteur',${JSON.stringify(c).replace(/"/g,"&quot;")})">Éditer</button>
+        <button class="btn-del"  onclick="deleteItem('/api/correcteurs/${c.id}', loadCorrecteurs)">Suppr.</button>
+      </td></tr>`)
+  );
+}
+
+// ===================== MATIERES =====================
+async function loadMatieres() {
+  const data = await apiFetch('/api/matieres');
+  cache.matieres = data;
+  document.getElementById('tbl-matieres').innerHTML = renderTable(
+    ['ID','Libellé','Correcteurs','Actions'],
+    data.map(m => {
+      const tags = (m.correcteurs||[]).map(c => `<span class="tag">${c.nom}</span>`).join('');
+      return `<tr>
+        <td>${m.id}</td>
+        <td>${m.libelle}</td>
+        <td>${tags || '<span style="color:var(--muted)">—</span>'}</td>
+        <td>
+          <button class="btn-edit" onclick="openModalMatiere(${JSON.stringify(m).replace(/"/g,"&quot;")})">Éditer</button>
+          <button class="btn-del"  onclick="deleteItem('/api/matieres/${m.id}', loadMatieres)">Suppr.</button>
+        </td></tr>`;
+    })
+  );
+}
+
+// ===================== NOTES =====================
+async function loadNotes() {
+  const data = await apiFetch('/api/notes');
+  document.getElementById('tbl-notes').innerHTML = renderTable(
+    ['ID','Candidat','Matière','Correcteur','Note','Actions'],
+    data.map(n => `<tr>
+      <td>${n.id}</td>
+      <td>${n.candidat?.nom||'—'}</td>
+      <td>${n.matiere?.libelle||'—'}</td>
+      <td>${n.correcteur?.nom||'—'}</td>
+      <td><strong>${n.note}</strong></td>
+      <td>
+        <button class="btn-edit" onclick="openModalNote(${JSON.stringify(n).replace(/"/g,"&quot;")})">Éditer</button>
+        <button class="btn-del"  onclick="deleteItem('/api/notes/${n.id}', loadNotes)">Suppr.</button>
+      </td></tr>`)
+  );
+}
+
+// ===================== PARAMETRES =====================
+async function loadParametres() {
+  const data = await apiFetch('/api/parametres');
+  document.getElementById('tbl-parametres').innerHTML = renderTable(
+    ['ID','Matière','Écart (E)','Opération','Résolution','Actions'],
+    data.map(p => `<tr>
+      <td>${p.id}</td>
+      <td>${p.matiere?.libelle||'—'}</td>
+      <td><code>${p.operation?.signe||'?'} ${p.ecart}</code></td>
+      <td>${p.operation?.signe||'—'}</td>
+      <td>${p.resolution?.libelle||'—'}</td>
+      <td>
+        <button class="btn-edit" onclick="openModalParametre(${JSON.stringify(p).replace(/"/g,"&quot;")})">Éditer</button>
+        <button class="btn-del"  onclick="deleteItem('/api/parametres/${p.id}', loadParametres)">Suppr.</button>
+      </td></tr>`)
+  );
+}
+
+// ===================== RESOLUTIONS =====================
+async function loadResolutions() {
+  const data = await apiFetch('/api/resolutions');
+  cache.resolutions = data;
+  document.getElementById('tbl-resolutions').innerHTML = renderTable(
+    ['ID','Libellé','Actions'],
+    data.map(r => `<tr>
+      <td>${r.id}</td>
+      <td>${r.libelle}</td>
+      <td>
+        <button class="btn-edit" onclick="openModalSimple('resolution',${JSON.stringify(r).replace(/"/g,"&quot;")},'/api/resolutions','libelle')">Éditer</button>
+        <button class="btn-del"  onclick="deleteItem('/api/resolutions/${r.id}', loadResolutions)">Suppr.</button>
+      </td></tr>`)
+  );
+}
+
+// ===================== OPERATIONS =====================
+async function loadOperations() {
+  const data = await apiFetch('/api/operations');
+  cache.operations = data;
+  document.getElementById('tbl-operations').innerHTML = renderTable(
+    ['ID','Signe','Actions'],
+    data.map(o => `<tr>
+      <td>${o.id}</td>
+      <td><code>${o.signe}</code></td>
+      <td>
+        <button class="btn-edit" onclick="openModalSimple('operation',${JSON.stringify(o).replace(/"/g,"&quot;")},'/api/operations','signe')">Éditer</button>
+        <button class="btn-del"  onclick="deleteItem('/api/operations/${o.id}', loadOperations)">Suppr.</button>
+      </td></tr>`)
+  );
+}
+
+// ===================== NOTES FINALES =====================
+async function loadNotesFinales() {
+  const data = await apiFetch('/api/note-finale');
+  document.getElementById('tbl-notes-finales').innerHTML = renderTable(
+    ['ID','Candidat','Matière','Note Finale','Actions'],
+    data.map(nf => `<tr>
+      <td>${nf.id}</td>
+      <td>${nf.candidat?.nom||'—'}</td>
+      <td>${nf.matiere?.libelle||'—'}</td>
+      <td><strong style="color:var(--green);font-size:16px">${nf.note}</strong></td>
+      <td>
+        <button class="btn-del" onclick="deleteItem('/api/note-finale/${nf.id}', loadNotesFinales)">Suppr.</button>
+      </td></tr>`)
+  );
+}
+
+// ===================== CALCULATEUR =====================
+let calcTimer = null;
+let allCandidats = [];
+let allMatieres  = [];
+
+async function initCalc() {
+  [allCandidats, allMatieres] = await Promise.all([
+    apiFetch('/api/candidats'),
+    apiFetch('/api/matieres')
+  ]);
+  cache.candidats = allCandidats;
+  cache.matieres  = allMatieres;
+}
+
+function filterCandidats(q) {
+  const drop = document.getElementById('drop-candidat');
+  const filtered = allCandidats.filter(c => c.nom.toLowerCase().includes(q.toLowerCase()));
+  if (!filtered.length || !q) { drop.classList.add('hidden'); return; }
+  drop.innerHTML = filtered.map(c =>
+    `<div class="dropdown-item" onmousedown="selectCandidat(${c.id},'${c.nom.replace(/'/g,"\\'")}')">
+      ${c.nom}
+    </div>`).join('');
+  drop.classList.remove('hidden');
+}
+
+function filterMatieres(q) {
+  const drop = document.getElementById('drop-matiere');
+  const filtered = allMatieres.filter(m => m.libelle.toLowerCase().includes(q.toLowerCase()));
+  if (!filtered.length || !q) { drop.classList.add('hidden'); return; }
+  drop.innerHTML = filtered.map(m =>
+    `<div class="dropdown-item" onmousedown="selectMatiere(${m.id},'${m.libelle.replace(/'/g,"\\'")}')">
+      ${m.libelle}
+    </div>`).join('');
+  drop.classList.remove('hidden');
+}
+
+function selectCandidat(id, label) {
+  document.getElementById('calc-candidat-input').value = label;
+  document.getElementById('calc-candidat-id').value   = id;
+  document.getElementById('drop-candidat').classList.add('hidden');
+  onCalcChange();
+}
+
+function selectMatiere(id, label) {
+  document.getElementById('calc-matiere-input').value = label;
+  document.getElementById('calc-matiere-id').value   = id;
+  document.getElementById('drop-matiere').classList.add('hidden');
+  onCalcChange();
+}
+
+function onCalcChange() {
+  clearTimeout(calcTimer);
+  const cId = document.getElementById('calc-candidat-id').value;
+  const mId = document.getElementById('calc-matiere-id').value;
+  if (!cId || !mId) return;
+  calcTimer = setTimeout(() => calculerNote(cId, mId), 300);
+}
+
+async function calculerNote(candidatId, matiereId) {
+  const box = document.getElementById('calc-result');
+  box.innerHTML = '<div class="loading">Calcul en cours…</div>';
+  try {
+    const r = await apiFetch(`/api/note-finale/calculer?candidatId=${candidatId}&matiereId=${matiereId}`);
+    renderResult(r, box);
+  } catch(e) {
+    box.innerHTML = `<div class="error-msg">❌ ${e.message}</div>`;
+  }
+}
+
+function renderResult(r, box) {
+  const hasNote = r.noteFinaleCalculee !== null && r.noteFinaleCalculee !== undefined;
+  const scoreHtml = hasNote
+    ? `<div class="result-score">${r.noteFinaleCalculee} <small style="font-size:18px;color:var(--muted)">/20</small></div>`
+    : `<div class="result-score null">Aucun paramètre applicable</div>`;
+
+  const diffRows = (r.details||[]).map(d =>
+    `<tr><td>${d.note1}</td><td>${d.note2}</td><td>|${d.note1} - ${d.note2}| = <strong>${d.difference}</strong></td></tr>`
+  ).join('');
+
+  box.innerHTML = `
+    <div class="result-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;color:var(--muted)">Candidat</div>
+          <div style="font-size:16px;font-weight:600">${r.candidatNom}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px;color:var(--muted)">Matière</div>
+          <div style="font-size:16px;font-weight:600">${r.matiereLibelle}</div>
+        </div>
+      </div>
+      ${scoreHtml}
+      <div class="result-meta">
+        <div class="meta-badge"><span>E (écart total)</span> ${r.totalDiff}</div>
+        <div class="meta-badge"><span>Condition</span> E ${r.operation} ${r.parametreEcart}</div>
+        <div class="meta-badge"><span>Applicable</span> ${r.parametreApplicable ? '✅ Oui' : '❌ Non'}</div>
+        <div class="meta-badge"><span>Résolution</span> ${r.resolution}</div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Notes :</div>
+        <div class="notes-list">${(r.notes||[]).map(n => `<div class="note-chip">${n}</div>`).join('')}</div>
+      </div>
+      ${diffRows ? `
+      <div style="margin-top:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Détail des différences :</div>
+        <table class="diff-table">
+          <thead><tr><th>Note 1</th><th>Note 2</th><th>Calcul</th></tr></thead>
+          <tbody>${diffRows}</tbody>
+        </table>
+      </div>` : ''}
+      <div class="result-meta" style="margin-top:16px">
+        <div class="meta-badge"><span>Max</span> ${r.noteMax}</div>
+        <div class="meta-badge"><span>Min</span> ${r.noteMin}</div>
+        <div class="meta-badge"><span>Moyenne</span> ${r.noteMoyenne}</div>
+      </div>
+      ${hasNote ? `
+      <button class="save-btn" onclick="sauvegarder(${r.candidatId},${r.matiereId})" id="btn-save">
+        ${r.sauvegardee ? '🔄 Mettre à jour' : '💾 Sauvegarder'}
+      </button>` : ''}
+      <button class="recalc-btn" onclick="calculerNote(${r.candidatId},${r.matiereId})">🔁 Recalculer</button>
+    </div>`;
+}
+
+async function sauvegarder(candidatId, matiereId) {
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('btn-save').textContent = 'Sauvegarde…';
+  try {
+    await apiFetch(`/api/note-finale/sauvegarder?candidatId=${candidatId}&matiereId=${matiereId}`, {method:'POST'});
+    await calculerNote(candidatId, matiereId);
+  } catch(e) {
+    alert('Erreur : ' + e.message);
+  }
+}
+
+// ===================== MODALS =====================
+function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
+
+// Modal CRUD candidat / correcteur
+function openModalCrud(type, item) {
+  const isNew = !item;
+  const isCandidat = type === 'candidat';
+  const url = isCandidat ? '/api/candidats' : '/api/correcteurs';
+  const box = document.getElementById('modal-box');
+  box.innerHTML = `
+    <h2>${isNew ? 'Ajouter' : 'Modifier'} ${isCandidat ? 'candidat' : 'correcteur'}</h2>
+    <div class="form-group">
+      <label>Nom</label>
+      <input type="text" id="f-nom" value="${item?.nom||''}"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+      <button class="btn-save" onclick="saveCrud('${type}','${url}',${item?.id||'null'})">Enregistrer</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+async function saveCrud(type, url, id) {
+  const nom = document.getElementById('f-nom').value.trim();
+  if (!nom) return alert('Nom requis');
+  const body = { nom };
+  try {
+    if (id) await apiFetch(`${url}/${id}`, {method:'PUT', body:JSON.stringify(body)});
+    else     await apiFetch(url, {method:'POST', body:JSON.stringify(body)});
+    closeModal();
+    if (type === 'candidat')   { loadCandidats(); initCalc(); }
+    if (type === 'correcteur') { loadCorrecteurs(); }
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+// Modal Matière (avec correcteurs)
+async function openModalMatiere(item) {
+  if (!cache.correcteurs.length) cache.correcteurs = await apiFetch('/api/correcteurs');
+  const selected = new Set((item?.correcteurs||[]).map(c => c.id));
+  const checkboxes = cache.correcteurs.map(c =>
+    `<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" value="${c.id}" ${selected.has(c.id)?'checked':''}/>
+      ${c.nom}
+    </label>`).join('');
+  const box = document.getElementById('modal-box');
+  box.innerHTML = `
+    <h2>${item ? 'Modifier' : 'Ajouter'} matière</h2>
+    <div class="form-group">
+      <label>Libellé</label>
+      <input type="text" id="f-libelle" value="${item?.libelle||''}"/>
+    </div>
+    <div class="form-group">
+      <label>Correcteurs assignés</label>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:180px;overflow-y:auto">
+        ${checkboxes}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+      <button class="btn-save" onclick="saveMatiere(${item?.id||'null'})">Enregistrer</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+async function saveMatiere(id) {
+  const libelle = document.getElementById('f-libelle').value.trim();
+  if (!libelle) return alert('Libellé requis');
+  const correcteurIds = [...document.querySelectorAll('#modal-box input[type=checkbox]:checked')].map(cb => parseInt(cb.value));
+  const body = { libelle, correcteurIds };
+  try {
+    if (id) await apiFetch(`/api/matieres/${id}`, {method:'PUT', body:JSON.stringify(body)});
+    else     await apiFetch('/api/matieres', {method:'POST', body:JSON.stringify(body)});
+    closeModal();
+    loadMatieres(); initCalc();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+// Modal Note
+async function openModalNote(item) {
+  if (!cache.candidats.length)   cache.candidats   = await apiFetch('/api/candidats');
+  if (!cache.matieres.length)    cache.matieres    = await apiFetch('/api/matieres');
+  if (!cache.correcteurs.length) cache.correcteurs = await apiFetch('/api/correcteurs');
+
+  const box = document.getElementById('modal-box');
+  box.innerHTML = `
+    <h2>${item ? 'Modifier' : 'Ajouter'} note</h2>
+    <div class="form-group">
+      <label>Candidat</label>
+      <select id="f-candidat">
+        ${cache.candidats.map(c => `<option value="${c.id}" ${item?.candidat?.id===c.id?'selected':''}>${c.nom}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Matière</label>
+      <select id="f-matiere">
+        ${cache.matieres.map(m => `<option value="${m.id}" ${item?.matiere?.id===m.id?'selected':''}>${m.libelle}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Correcteur</label>
+      <select id="f-correcteur">
+        ${cache.correcteurs.map(c => `<option value="${c.id}" ${item?.correcteur?.id===c.id?'selected':''}>${c.nom}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Note (0-20)</label>
+      <input type="text" id="f-note" value="${item?.note||''}"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+      <button class="btn-save" onclick="saveNote(${item?.id||'null'})">Enregistrer</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+async function saveNote(id) {
+  const body = {
+    idCandidat:   parseInt(document.getElementById('f-candidat').value),
+    idMatiere:    parseInt(document.getElementById('f-matiere').value),
+    idCorrecteur: parseInt(document.getElementById('f-correcteur').value),
+    note:         parseFloat(document.getElementById('f-note').value)
+  };
+  if (isNaN(body.note)) return alert('Note invalide');
+  try {
+    if (id) await apiFetch(`/api/notes/${id}`, {method:'PUT', body:JSON.stringify(body)});
+    else     await apiFetch('/api/notes', {method:'POST', body:JSON.stringify(body)});
+    closeModal();
+    loadNotes();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+// Modal Paramètre
+async function openModalParametre(item) {
+  if (!cache.matieres.length)    cache.matieres    = await apiFetch('/api/matieres');
+  if (!cache.resolutions.length) cache.resolutions = await apiFetch('/api/resolutions');
+  if (!cache.operations.length)  cache.operations  = await apiFetch('/api/operations');
+
+  const box = document.getElementById('modal-box');
+  box.innerHTML = `
+    <h2>${item ? 'Modifier' : 'Ajouter'} paramètre</h2>
+    <div class="form-group">
+      <label>Matière</label>
+      <select id="f-p-matiere">
+        ${cache.matieres.map(m => `<option value="${m.id}" ${item?.matiere?.id===m.id?'selected':''}>${m.libelle}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Opération</label>
+        <select id="f-p-operation">
+          ${cache.operations.map(o => `<option value="${o.id}" ${item?.operation?.id===o.id?'selected':''}>${o.signe}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Différence (seuil)</label>
+        <input type="text" id="f-p-ecart" value="${item?.ecart||''}"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Résolution</label>
+      <select id="f-p-resolution">
+        ${cache.resolutions.map(r => `<option value="${r.id}" ${item?.resolution?.id===r.id?'selected':''}>${r.libelle}</option>`).join('')}
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+      <button class="btn-save" onclick="saveParametre(${item?.id||'null'})">Enregistrer</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+async function saveParametre(id) {
+  const body = {
+    idMatiere:    parseInt(document.getElementById('f-p-matiere').value),
+    idOperation:  parseInt(document.getElementById('f-p-operation').value),
+    idResolution: parseInt(document.getElementById('f-p-resolution').value),
+    ecart:   parseFloat(document.getElementById('f-p-ecart').value)
+  };
+  if (isNaN(body.ecart)) return alert('Écart invalide');
+  try {
+    if (id) await apiFetch(`/api/parametres/${id}`, {method:'PUT', body:JSON.stringify(body)});
+    else     await apiFetch('/api/parametres', {method:'POST', body:JSON.stringify(body)});
+    closeModal();
+    loadParametres();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+// Modal simple (résolution / opération)
+function openModalSimple(type, item, url, field) {
+  const box = document.getElementById('modal-box');
+  box.innerHTML = `
+    <h2>${item ? 'Modifier' : 'Ajouter'} ${type}</h2>
+    <div class="form-group">
+      <label>${field === 'libelle' ? 'Libellé' : 'Signe'}</label>
+      <input type="text" id="f-simple" value="${item?.[field]||''}"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+      <button class="btn-save" onclick="saveSimple('${url}',${item?.id||'null'},'${field}','${type}')">Enregistrer</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+async function saveSimple(url, id, field, type) {
+  const val = document.getElementById('f-simple').value.trim();
+  if (!val) return alert('Champ requis');
+  const body = { [field]: val };
+  try {
+    if (id) await apiFetch(`${url}/${id}`, {method:'PUT', body:JSON.stringify(body)});
+    else     await apiFetch(url, {method:'POST', body:JSON.stringify(body)});
+    closeModal();
+    if (type === 'resolution') loadResolutions();
+    if (type === 'operation')  loadOperations();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+// Delete
+async function deleteItem(url, reloadFn) {
+  if (!confirm('Supprimer cet élément ?')) return;
+  try {
+    await apiFetch(url, {method:'DELETE'});
+    reloadFn();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+// Render helper
+function renderTable(headers, rows) {
+  if (!rows.length) return '<div class="empty">Aucune donnée</div>';
+  return `<table>
+    <thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.join('')}</tbody>
+  </table>`;
+}
+
+// ===================== INIT =====================
+initCalc();
+</script>
+</body>
+</html>
